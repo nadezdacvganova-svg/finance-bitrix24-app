@@ -1,0 +1,47 @@
+import { useMemo, useState } from 'react';
+import { Link } from 'wouter';
+import { Activity, ArrowRight, BriefcaseBusiness, CircleDollarSign, Percent, Plus, RefreshCcw, ShieldCheck, TrendingUp, WalletCards } from 'lucide-react';
+import { useListProjects, useListTransactions, useGetBitrixStatus } from '@workspace/api-client-react';
+import { Button } from '@/components/ui/button';
+import { CreateProjectDialog } from '@/components/forms';
+import { PageHeading } from '@/components/layout';
+import { EmptyState, ErrorState, formatMoney, formatPercent, LoadingRows, ProjectCard, TransactionRow } from '@/components/finance-ui';
+
+export default function Dashboard() {
+  const [projectDialog, setProjectDialog] = useState(false);
+  const projectsQuery = useListProjects();
+  const transactionsQuery = useListTransactions({ limit: 6 });
+  const bitrixQuery = useGetBitrixStatus();
+  const projects = projectsQuery.data ?? [];
+  const transactions = transactionsQuery.data ?? [];
+  const totals = useMemo(() => {
+    const result = projects.reduce((acc, project) => ({ income: acc.income + project.totalIncome, expenses: acc.expenses + project.totalExpenses, profit: acc.profit + project.profit }), { income: 0, expenses: 0, profit: 0 });
+    return { ...result, profitability: result.income > 0 ? (result.profit / result.income) * 100 : 0 };
+  }, [projects]);
+  const hasError = projectsQuery.isError || transactionsQuery.isError;
+
+  return <div className="space-y-10">
+    <PageHeading eyebrow="Среда управления · сегодня" title="Финансовый учёт" description="Доходы, расходы и эффективность всего портфеля — в одном месте." actions={<Button data-testid="button-refresh-dashboard" variant="ghost" size="icon" onClick={() => { void projectsQuery.refetch(); void transactionsQuery.refetch(); }}><RefreshCcw className="h-4 w-4" /></Button>} />
+
+    {hasError ? <ErrorState onRetry={() => { void projectsQuery.refetch(); void transactionsQuery.refetch(); }} /> : projectsQuery.isLoading ? <LoadingRows count={3} /> : <>
+      <section className="animate-in delay-1 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div data-testid="stat-total-income" className="rounded-2xl border border-border bg-card p-5 shadow-sm"><div className="flex items-center justify-between"><p className="text-xs text-muted-foreground">Доходы портфеля</p><div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--chart-3)/.13)] text-[hsl(var(--chart-3))]"><TrendingUp className="h-4 w-4" /></div></div><p className="mt-5 font-mono text-2xl font-medium tracking-[-0.06em]">{formatMoney(totals.income)} ₽</p><p className="mt-2 text-xs text-muted-foreground">по {projects.length} {projects.length === 1 ? 'проекту' : 'проектам'}</p></div>
+        <div data-testid="stat-total-expenses" className="rounded-2xl border border-border bg-card p-5 shadow-sm"><div className="flex items-center justify-between"><p className="text-xs text-muted-foreground">Расходы портфеля</p><div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--chart-4)/.13)] text-[hsl(var(--chart-4))]"><WalletCards className="h-4 w-4" /></div></div><p className="mt-5 font-mono text-2xl font-medium tracking-[-0.06em]">{formatMoney(totals.expenses)} ₽</p><p className="mt-2 text-xs text-muted-foreground">все активные операции</p></div>
+        <div data-testid="stat-total-profit" className="rounded-2xl border border-primary/20 bg-primary p-5 text-primary-foreground shadow-md"><div className="flex items-center justify-between"><p className="text-xs text-primary-foreground/65">Прибыль портфеля</p><div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-accent-foreground"><CircleDollarSign className="h-4 w-4" /></div></div><p className="mt-5 font-mono text-2xl font-medium tracking-[-0.06em]">{totals.profit >= 0 ? '+' : '−'}{formatMoney(Math.abs(totals.profit))} ₽</p><p className="mt-2 text-xs text-primary-foreground/58">после всех расходов</p></div>
+        <div data-testid="stat-total-profitability" className="rounded-2xl border border-border bg-card p-5 shadow-sm"><div className="flex items-center justify-between"><p className="text-xs text-muted-foreground">Рентабельность портфеля</p><div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/35 text-primary"><Percent className="h-4 w-4" /></div></div><p className="mt-5 font-mono text-2xl font-medium tracking-[-0.06em]">{formatPercent(totals.profitability)}</p><p className="mt-2 text-xs text-muted-foreground">прибыль к доходам</p></div>
+        <div data-testid="stat-projects" className="rounded-2xl border border-border bg-card p-5 shadow-sm"><div className="flex items-center justify-between"><p className="text-xs text-muted-foreground">Проекты в работе</p><div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/35 text-primary"><BriefcaseBusiness className="h-4 w-4" /></div></div><p className="mt-5 font-mono text-2xl font-medium tracking-[-0.06em]">{projects.length.toString().padStart(2, '0')}</p><p className="mt-2 text-xs text-muted-foreground">финансовый обзор готов</p></div>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1.35fr_.65fr]">
+        <div className="animate-in delay-2"><div className="mb-4 flex items-end justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Портфель</p><h2 className="mt-2 font-serif text-2xl font-bold tracking-[-0.03em]">Проекты</h2></div><Button data-testid="button-new-project" variant="outline" size="sm" onClick={() => setProjectDialog(true)}><Plus className="mr-2 h-4 w-4" />Новый проект</Button></div>{projects.length === 0 ? <EmptyState title="Портфель пока пуст" description="Добавьте первый проект — и финансовая картина начнёт складываться." action={<Button data-testid="button-empty-new-project" onClick={() => setProjectDialog(true)}>Добавить проект</Button>} /> : <div className="grid gap-4 md:grid-cols-2">{projects.map((project) => <ProjectCard key={project.id} project={project} />)}</div>}</div>
+        <div className="animate-in delay-3 rounded-2xl border border-border bg-card p-5 shadow-sm"><div className="flex items-start justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Последние движения</p><h2 className="mt-2 font-serif text-2xl font-bold tracking-[-0.03em]">Журнал</h2></div><Activity className="h-5 w-5 text-accent-foreground" /></div>{transactionsQuery.isLoading ? <div className="mt-6"><LoadingRows count={3} /></div> : transactions.length === 0 ? <div className="py-12"><EmptyState title="Операций ещё нет" description="Доходы и расходы появятся здесь после первой записи." /></div> : <div className="mt-3">{transactions.slice(0, 5).map((transaction) => <TransactionRow compact key={transaction.id} transaction={transaction} />)}</div>}<Link href="/settings" data-testid="link-view-all-transactions" className="mt-4 flex items-center justify-between border-t border-border pt-4 text-xs font-semibold text-primary hover:text-primary/70"><span>Управлять категориями</span><ArrowRight className="h-4 w-4" /></Link></div>
+      </section>
+
+      <section className="animate-in delay-4 grid gap-6 lg:grid-cols-[1fr_1fr]">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/35 text-primary"><ShieldCheck className="h-5 w-5" /></div><div><p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Интеграции</p><h2 className="mt-1 font-serif text-xl font-bold">Bitrix24</h2></div></div><div className="mt-6 flex items-center justify-between rounded-xl bg-secondary/55 px-4 py-3"><div className="flex items-center gap-2.5"><span className={`h-2.5 w-2.5 rounded-full ${bitrixQuery.data?.connected ? 'bg-[hsl(var(--chart-3))]' : 'bg-muted-foreground/35'}`} /><span data-testid="status-bitrix-dashboard" className="text-sm font-medium">{bitrixQuery.isLoading ? 'Проверяем соединение…' : bitrixQuery.data?.connected ? 'Подключено' : 'Ожидает подключения'}</span></div><Link href="/settings" data-testid="link-bitrix-settings" className="text-xs font-semibold text-primary">Настроить</Link></div><p className="mt-3 text-xs leading-relaxed text-muted-foreground">{bitrixQuery.data?.message || 'Статус интеграции и синхронизации данных.'}</p></div>
+        <div className="rounded-2xl border border-primary/15 bg-primary p-6 text-primary-foreground shadow-md"><div className="flex items-start justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary-foreground/55">Фокус дня</p><h2 className="mt-2 max-w-xs font-serif text-2xl font-bold leading-tight">Сначала факты. Потом решения.</h2></div><CircleDollarSign className="h-5 w-5 text-accent" /></div><p className="mt-5 max-w-md text-sm leading-relaxed text-primary-foreground/68">Фиксируйте движения в день операции — так рентабельность проекта остаётся честной, а не приблизительной.</p><div className="mt-6 flex items-center gap-3"><div className="h-1 flex-1 overflow-hidden rounded-full bg-primary-foreground/15"><div className="h-full w-[72%] rounded-full bg-accent" /></div><span className="font-mono text-xs text-accent">72%</span></div></div>
+      </section>
+    </>}
+    <CreateProjectDialog open={projectDialog} onOpenChange={setProjectDialog} />
+  </div>;
+}

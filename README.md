@@ -26,3 +26,4 @@ pnpm run typecheck
 - `artifacts/api-server` — API-сервер;
 - `lib/db` — схема PostgreSQL и Drizzle;
 - `lib/api-spec` — OpenAPI-контракт.
+####
